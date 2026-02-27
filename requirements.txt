@@ -1,0 +1,12 @@
+annotated-types==0.7.0
+anyio==4.12.1
+click==8.3.1
+fastapi==0.115.0
+h11==0.16.0
+idna==3.11
+pydantic==2.8.0
+pydantic_core==2.20.0
+python-dotenv==1.0.0
+starlette==0.38.6
+typing_extensions==4.15.0
+uvicorn==0.30.0
