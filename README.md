@@ -168,11 +168,12 @@ pytest tests/test_review_comment.py -v
 
 | Agent | Purpose |
 |-------|---------|
-| MasterAgent | Orchestrates workflow and delegates tasks |
-| DevOpsAgent | Handles Git operations, branches, commits, merges |
-| CodeQualityAgent | Reviews naming, duplication, complexity (future) |
-| SecurityAgent | Reviews security vulnerabilities (future) |
-| PerformanceAgent | Reviews performance issues (future) |
+| MasterAgent | Orchestrates workflow and delegates to specialized agents in parallel |
+| CodeQualityAgent | Reviews naming, duplication, complexity |
+| SecurityAgent | Reviews security vulnerabilities (secrets, SQL injection, XSS) |
+| PerformanceAgent | Reviews performance issues (algorithms, loops) |
+| DocumentationAgent | Reviews docstrings, comments, TODO/FIXME |
+| TestingAgent | Reviews test coverage, edge cases |
 
 ## Contributing
 

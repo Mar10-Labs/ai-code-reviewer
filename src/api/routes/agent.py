@@ -13,20 +13,31 @@ async def execute_command(request: UserCommandRequest):
     return {
         "intent": response.intent.value,
         "message": response.message,
-        "questions": response.questions,
+        "agent_results": response.agent_results,
+        "summary": response.summary,
         "context": {
-            "current_issue": response.context.current_issue if response.context else None,
-            "workflow_step": response.context.workflow_step if response.context else None
+            "repository": response.context.repository if response.context else None,
+            "pr_number": response.context.pr_number if response.context else None
         } if response.context else None
     }
 
 
-@router.get("/status")
-async def get_git_status():
-    response = await master.process("status")
+@router.post("/review")
+async def review_pr(diff_content: str, repository: str = "", pr_number: int = 0):
+    response = await master.review_pr(diff_content, repository, pr_number)
     return {
+        "intent": response.intent.value,
         "message": response.message,
-        "data": response.agent_results[0].data if response.agent_results else None
+        "agent_results": response.agent_results,
+        "summary": response.summary
+    }
+
+
+@router.get("/status")
+async def get_status():
+    return {
+        "message": "AI Code Reviewer is running",
+        "agents": [a.config.name for a in master.agents]
     }
 
 

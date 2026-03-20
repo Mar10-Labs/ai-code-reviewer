@@ -30,12 +30,11 @@ class TestAgentEndpoints:
         assert isinstance(data["commands"], list)
         assert len(data["commands"]) > 0
 
-    def test_get_commands_contains_expected_commands(self, client):
+    def test_get_commands_contains_review(self, client):
         response = client.get("/agent/commands")
         commands = response.json()["commands"]
         command_text = " ".join(commands)
-        assert "execute" in command_text.lower()
-        assert "status" in command_text.lower()
+        assert "review" in command_text.lower()
 
     def test_get_history_returns_list(self, client):
         response = client.get("/agent/history")
@@ -49,26 +48,17 @@ class TestAgentEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert "message" in data
-        assert "git" in data["message"].lower() or "branch" in data["message"].lower()
+        assert "agents" in data
 
-    def test_post_command_execute_issue(self, client):
+    def test_post_command_review(self, client):
         response = client.post(
             "/agent/command",
-            json={"command": "execute #999", "auto_mode": False}
+            json={"command": "review pr"}
         )
         assert response.status_code == 200
         data = response.json()
         assert "intent" in data
         assert "message" in data
-
-    def test_post_command_status(self, client):
-        response = client.post(
-            "/agent/command",
-            json={"command": "status", "auto_mode": False}
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert data["intent"] == "check_status"
 
     def test_post_command_help(self, client):
         response = client.post(
@@ -78,7 +68,6 @@ class TestAgentEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert data["intent"] == "help"
-        assert "Execute" in data["message"] or "execute" in data["message"].lower()
 
     def test_post_command_unknown_shows_error(self, client):
         response = client.post(
@@ -89,13 +78,22 @@ class TestAgentEndpoints:
         data = response.json()
         assert data["intent"] == "unknown"
 
-    def test_post_command_unknown_message(self, client):
+
+class TestReviewEndpoint:
+    def test_review_endpoint(self, client):
         response = client.post(
-            "/agent/command",
-            json={"command": "invalid", "auto_mode": False}
+            "/agent/review",
+            params={
+                "diff_content": "def test(): pass",
+                "repository": "test/repo",
+                "pr_number": 1
+            }
         )
+        assert response.status_code == 200
         data = response.json()
-        assert "help" in data["message"].lower() or "comandos" in data["message"].lower()
+        assert "intent" in data
+        assert "agent_results" in data
+        assert "summary" in data
 
 
 class TestOpenAPISchema:
