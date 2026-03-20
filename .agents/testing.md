@@ -20,6 +20,7 @@ Este agente interviene cuando:
 - No me pisso con otros agentes
 - Me enfoco solo en tests y coverage
 - Verifico que tests sean determinísticos
+- El porcentaje de cobertura total de test debe ser superior al 90%
 
 ## Output
 ```markdown
