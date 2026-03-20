@@ -2,19 +2,11 @@ from typing import Optional, Literal
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, timezone
 
+from src.models.review_comment import ReviewComment
+
 
 def utc_now():
     return datetime.now(timezone.utc)
-
-
-class ReviewComment(BaseModel):
-    file_path: str
-    line_number: int
-    severity: Literal["critical", "warning", "suggestion"]
-    category: Literal["security", "performance", "quality", "debt", "tests"]
-    comment: str = Field(min_length=20, max_length=500)
-    suggested_fix: Optional[str] = None
-    confidence: float = Field(ge=0.0, le=1.0)
 
 
 class EnrichedDiff(BaseModel):
