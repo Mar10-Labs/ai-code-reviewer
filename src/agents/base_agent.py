@@ -15,6 +15,7 @@ class AgentType(Enum):
     ARCHITECTURE = "architecture"
     DOCS = "docs"
     MASTER = "master"
+    SPECIALIST = "specialist"
 
 
 class AgentCapability(Enum):
@@ -24,6 +25,8 @@ class AgentCapability(Enum):
     GITHUB_API = "github_api"
     FILE_SYSTEM = "file_system"
     USER_INTERACTION = "user_interaction"
+    CODE_ANALYSIS = "code_analysis"
+    SECURITY_SCAN = "security_scan"
 
 
 @dataclass

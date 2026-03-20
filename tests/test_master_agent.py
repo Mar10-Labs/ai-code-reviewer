@@ -7,351 +7,138 @@ from src.agents.master_agent import MasterAgent, Intent, ConversationContext, Ma
 class TestMasterAgentInit:
     def test_agent_initialization(self):
         agent = MasterAgent()
-        assert agent.devops is not None
+        assert agent.agents is not None
+        assert len(agent.agents) == 5
         assert agent.context is not None
 
     def test_available_commands(self):
         agent = MasterAgent()
         commands = agent.get_available_commands()
         assert len(commands) > 0
-        assert any("execute" in c.lower() for c in commands)
+        assert any("review" in c.lower() for c in commands)
 
 
 class TestMasterAgentClassifyIntent:
-    def test_execute_issue_intent(self):
+    def test_review_intent(self):
         agent = MasterAgent()
-        
-        assert agent.classify_intent("execute #10") == Intent.EXECUTE_ISSUE
-        assert agent.classify_intent("execute #123") == Intent.EXECUTE_ISSUE
-        assert agent.classify_intent("issue #5") == Intent.EXECUTE_ISSUE
+        assert agent.classify_intent("review pr") == Intent.REVIEW_PR
+        assert agent.classify_intent("review #10") == Intent.REVIEW_PR
 
-    def test_status_intent(self):
+    def test_analyze_intent(self):
         agent = MasterAgent()
-        
-        assert agent.classify_intent("status") == Intent.CHECK_STATUS
-        assert agent.classify_intent("git status") == Intent.CHECK_STATUS
-        assert agent.classify_intent("estado") == Intent.CHECK_STATUS
-
-    def test_branch_intent(self):
-        agent = MasterAgent()
-        
-        assert agent.classify_intent("create branch") == Intent.CREATE_BRANCH
-        assert agent.classify_intent("new branch #15") == Intent.CREATE_BRANCH
-
-    def test_commit_intent(self):
-        agent = MasterAgent()
-        
-        assert agent.classify_intent("commit") == Intent.COMMIT_CHANGES
-        assert agent.classify_intent("commits") == Intent.COMMIT_CHANGES
-
-    def test_merge_intent(self):
-        agent = MasterAgent()
-        
-        assert agent.classify_intent("merge") == Intent.MERGE_BRANCH
-        assert agent.classify_intent("pr") == Intent.MERGE_BRANCH
-        assert agent.classify_intent("pull request") == Intent.MERGE_BRANCH
-
-    def test_test_intent(self):
-        agent = MasterAgent()
-        
-        assert agent.classify_intent("test") == Intent.RUN_TESTS
-        assert agent.classify_intent("pytest") == Intent.RUN_TESTS
-        assert agent.classify_intent("tests") == Intent.RUN_TESTS
+        assert agent.classify_intent("analyze file.py") == Intent.ANALYZE_FILE
+        assert agent.classify_intent("check code") == Intent.ANALYZE_FILE
 
     def test_help_intent(self):
         agent = MasterAgent()
-        
         assert agent.classify_intent("help") == Intent.HELP
         assert agent.classify_intent("ayuda") == Intent.HELP
-        assert agent.classify_intent("comandos") == Intent.HELP
 
     def test_unknown_intent(self):
         agent = MasterAgent()
-        
         assert agent.classify_intent("random text") == Intent.UNKNOWN
-        assert agent.classify_intent("something else") == Intent.UNKNOWN
 
 
-class TestMasterAgentExtractIssue:
-    def test_extract_issue_number_hash(self):
-        agent = MasterAgent()
-        
-        assert agent.extract_issue_number("#10") == 10
-        assert agent.extract_issue_number("#123") == 123
-
-    def test_extract_issue_number_no_hash(self):
-        agent = MasterAgent()
-        
-        assert agent.extract_issue_number("execute #5") == 5
-        assert agent.extract_issue_number("issue #42") == 42
-
-    def test_extract_issue_number_not_found(self):
-        agent = MasterAgent()
-        
-        assert agent.extract_issue_number("no issue") is None
-
-
-class TestMasterAgentGuessTitle:
-    def test_known_issue_titles(self):
-        agent = MasterAgent()
-        
-        assert "AgentState" in agent._guess_issue_title("", 10)
-        assert "ReviewComment" in agent._guess_issue_title("", 11)
-        assert "MCP" in agent._guess_issue_title("", 12)
-
-    def test_unknown_issue_title(self):
-        agent = MasterAgent()
-        
-        title = agent._guess_issue_title("", 999)
-        assert "999" in title
-
-
-class TestMasterAgentHandleHelp:
+class TestMasterAgentReviewPR:
     @pytest.mark.asyncio
-    async def test_help_returns_commands(self):
+    async def test_review_pr_runs_all_agents(self):
         agent = MasterAgent()
-        response = await agent._handle_help("help")
         
-        assert response.intent == Intent.HELP
-        assert "COMMANDS" in response.message or "comando" in response.message.lower()
+        diff = "def hello():\n    password = 'secret'\n    return True"
+        
+        with patch.object(agent.agents[0], "execute", new_callable=AsyncMock) as mock_cq:
+            with patch.object(agent.agents[1], "execute", new_callable=AsyncMock) as mock_perf:
+                with patch.object(agent.agents[2], "execute", new_callable=AsyncMock) as mock_sec:
+                    with patch.object(agent.agents[3], "execute", new_callable=AsyncMock) as mock_doc:
+                        with patch.object(agent.agents[4], "execute", new_callable=AsyncMock) as mock_test:
+                            mock_cq.return_value = {"agent": "CodeQuality", "results": [], "summary": "0 issues"}
+                            mock_perf.return_value = {"agent": "Performance", "results": [], "summary": "0 issues"}
+                            mock_sec.return_value = {"agent": "Security", "results": [], "summary": "0 issues"}
+                            mock_doc.return_value = {"agent": "Documentation", "results": [], "summary": "0 issues"}
+                            mock_test.return_value = {"agent": "Testing", "results": [], "summary": "0 issues"}
+                            
+                            response = await agent.review_pr(diff, "test/repo", 1)
+        
+        assert response.intent == Intent.REVIEW_PR
+        assert len(response.agent_results) == 5
 
-
-class TestMasterAgentHandleCheckStatus:
     @pytest.mark.asyncio
-    async def test_check_status_returns_report(self):
+    async def test_review_pr_detects_security_issues(self):
         agent = MasterAgent()
         
-        with patch.object(agent.devops, "execute", new_callable=AsyncMock) as mock_execute:
-            mock_execute.return_value = MagicMock(
-                success=True,
-                data={"current_branch": "main"}
-            )
-            with patch.object(agent.devops, "generate_status_report", return_value="Git status report"):
-                response = await agent._handle_check_status("status")
-                
-        assert response.intent == Intent.CHECK_STATUS
-        assert "Git" in response.message or "git" in response.message.lower()
-
-
-class TestMasterAgentHandleCreateBranch:
-    @pytest.mark.asyncio
-    async def test_create_branch_success(self):
-        agent = MasterAgent()
+        diff = "password = 'hardcoded_secret'"
         
-        with patch.object(agent.devops, "execute", new_callable=AsyncMock) as mock_execute:
-            mock_execute.return_value = MagicMock(
-                success=True,
-                data={"branch": "feat/100-test"},
-                message="Branch created"
-            )
-            response = await agent._handle_create_branch("create branch #100")
+        with patch.object(agent.agents[2], "execute", new_callable=AsyncMock) as mock_sec:
+            from src.agents.specialists.security_agent import ReviewResult
+            mock_sec.return_value = {
+                "agent": "Security",
+                "results": [
+                    ReviewResult(
+                        file_path="test.py",
+                        line_number=1,
+                        severity="critical",
+                        category="security",
+                        comment="Hardcoded secret detected",
+                        suggested_fix="Use environment variable"
+                    )
+                ],
+                "summary": "1 security issue"
+            }
             
-        assert response.intent == Intent.CREATE_BRANCH
-        assert "100" in response.message or "test" in response.message.lower()
-
-    @pytest.mark.asyncio
-    async def test_create_branch_no_issue(self):
-        agent = MasterAgent()
+            response = await agent.review_pr(diff, "test/repo", 1)
         
-        with patch.object(agent.devops, "execute", new_callable=AsyncMock) as mock_execute:
-            mock_execute.return_value = MagicMock(
-                success=True,
-                data={"branch": "feat/0-new-feature"},
-                message="Branch created"
-            )
-            response = await agent._handle_create_branch("create branch")
-            
-        assert response.intent == Intent.CREATE_BRANCH
-
-
-class TestMasterAgentHandleCommit:
-    @pytest.mark.asyncio
-    async def test_commit_success(self):
-        agent = MasterAgent()
-        
-        with patch.object(agent.devops, "execute", new_callable=AsyncMock) as mock_execute:
-            mock_execute.return_value = MagicMock(
-                success=True,
-                message="Commit successful"
-            )
-            response = await agent._handle_commit("commit")
-            
-        assert response.intent == Intent.COMMIT_CHANGES
-        assert len(response.questions) == 1
-
-    @pytest.mark.asyncio
-    async def test_commit_failure(self):
-        agent = MasterAgent()
-        
-        with patch.object(agent.devops, "execute", new_callable=AsyncMock) as mock_execute:
-            mock_execute.return_value = MagicMock(
-                success=False,
-                message="Commit failed"
-            )
-            response = await agent._handle_commit("commit")
-            
-        assert response.intent == Intent.COMMIT_CHANGES
-        assert len(response.questions) == 0
-
-
-class TestMasterAgentHandleMerge:
-    @pytest.mark.asyncio
-    async def test_merge_success(self):
-        agent = MasterAgent()
-        
-        with patch.object(agent.devops, "execute", new_callable=AsyncMock) as mock_execute:
-            mock_execute.return_value = MagicMock(
-                success=True,
-                message="Merge successful"
-            )
-            response = await agent._handle_merge("merge")
-            
-        assert response.intent == Intent.MERGE_BRANCH
-        assert agent.context.workflow_step == "completed"
-        assert len(response.questions) == 1
-
-    @pytest.mark.asyncio
-    async def test_merge_failure(self):
-        agent = MasterAgent()
-        
-        with patch.object(agent.devops, "execute", new_callable=AsyncMock) as mock_execute:
-            mock_execute.return_value = MagicMock(
-                success=False,
-                message="Merge failed"
-            )
-            response = await agent._handle_merge("merge")
-            
-        assert response.intent == Intent.MERGE_BRANCH
-        assert len(response.questions) == 0
-
-
-class TestMasterAgentExecuteIssue:
-    @pytest.mark.asyncio
-    async def test_execute_issue_no_issue_number(self):
-        agent = MasterAgent()
-        response = await agent._handle_execute_issue("execute issue")
-        
-        assert response.intent == Intent.EXECUTE_ISSUE
-        assert len(response.questions) == 1
-
-    @pytest.mark.asyncio
-    async def test_execute_issue_with_actions_needed(self):
-        agent = MasterAgent()
-        
-        with patch.object(agent.devops, "execute", new_callable=AsyncMock) as mock_execute:
-            mock_execute.return_value = MagicMock(
-                success=True,
-                data={
-                    "on_main": False,
-                    "current_branch": "feat/10-old",
-                    "orphan_branches": ["feat/10-old"],
-                    "is_clean": False,
-                    "changes_count": 3
-                }
-            )
-            response = await agent._handle_execute_issue("execute #10")
-            
-        assert response.intent == Intent.EXECUTE_ISSUE
-        assert len(response.questions) == 1
-        assert "prepare_issue" in response.questions[0]["id"]
-
-    @pytest.mark.asyncio
-    async def test_prepare_and_execute_branch_failure(self):
-        agent = MasterAgent()
-        agent.context.current_issue_title = "Test"
-        
-        with patch.object(agent.devops, "execute", new_callable=AsyncMock) as mock_execute:
-            mock_execute.return_value = MagicMock(
-                success=False,
-                message="Failed to create branch"
-            )
-            response = await agent._prepare_and_execute(10)
-            
-        assert response.intent == Intent.EXECUTE_ISSUE
-        assert "error" in response.message.lower() or "failed" in response.message.lower()
-
-
-class TestMasterAgentHandleRunTests:
-    @pytest.mark.asyncio
-    async def test_run_tests_success(self):
-        agent = MasterAgent()
-        
-        with patch.object(agent.devops, "execute", new_callable=AsyncMock) as mock_execute:
-            mock_execute.return_value = MagicMock(success=True, message="Tests passed")
-            response = await agent._handle_run_tests("pytest")
-            
-        assert response.intent == Intent.RUN_TESTS
-
-    @pytest.mark.asyncio
-    async def test_run_tests_failure(self):
-        agent = MasterAgent()
-        
-        with patch.object(agent.devops, "execute", new_callable=AsyncMock) as mock_execute:
-            mock_execute.return_value = MagicMock(success=False, message="Tests failed")
-            response = await agent._handle_run_tests("pytest")
-            
-        assert response.intent == Intent.RUN_TESTS
-
-
-class TestMasterAgentHandleUnknown:
-    @pytest.mark.asyncio
-    async def test_unknown_returns_error_message(self):
-        agent = MasterAgent()
-        response = await agent._handle_unknown("random unknown command")
-        
-        assert response.intent == Intent.UNKNOWN
-        assert "help" in response.message.lower() or "comando" in response.message.lower()
+        assert response.summary["total_issues"] >= 1
+        assert response.summary["critical"] >= 1
 
 
 class TestMasterAgentProcess:
     @pytest.mark.asyncio
-    async def test_process_status(self):
+    async def test_process_review_command(self):
         agent = MasterAgent()
         
-        with patch.object(agent, "_handle_check_status", new_callable=AsyncMock) as mock_handler:
-            mock_handler.return_value = MasterResponse(
-                intent=Intent.CHECK_STATUS,
-                message="Status report"
+        with patch.object(agent, "review_pr", new_callable=AsyncMock) as mock_review:
+            mock_review.return_value = MasterResponse(
+                intent=Intent.REVIEW_PR,
+                message="Review completed"
             )
-            response = await agent.process("status")
-            
-        assert response.intent == Intent.CHECK_STATUS
+            response = await agent.process("review pr")
+        
+        assert response.intent == Intent.REVIEW_PR
 
     @pytest.mark.asyncio
-    async def test_process_help(self):
+    async def test_process_help_command(self):
         agent = MasterAgent()
-        
-        with patch.object(agent, "_handle_help", new_callable=AsyncMock) as mock_handler:
-            mock_handler.return_value = MasterResponse(
-                intent=Intent.HELP,
-                message="Help text"
-            )
-            response = await agent.process("help")
-            
+        response = await agent.process("help")
         assert response.intent == Intent.HELP
+        assert "CODE REVIEWER" in response.message
+
+    @pytest.mark.asyncio
+    async def test_process_unknown_command(self):
+        agent = MasterAgent()
+        response = await agent.process("random unknown command")
+        assert response.intent == Intent.UNKNOWN
+        assert "help" in response.message.lower()
 
 
 class TestConversationContext:
     def test_context_default_values(self):
         ctx = ConversationContext()
-        
-        assert ctx.current_issue is None
-        assert ctx.current_issue_title == ""
+        assert ctx.repository == ""
+        assert ctx.pr_number is None
+        assert ctx.diff_content == ""
         assert ctx.workflow_step == "idle"
-        assert ctx.auto_mode is False
 
 
 class TestMasterResponse:
     def test_response_creation(self):
         response = MasterResponse(
-            intent=Intent.CHECK_STATUS,
+            intent=Intent.REVIEW_PR,
             message="Test message"
         )
-        
-        assert response.intent == Intent.CHECK_STATUS
+        assert response.intent == Intent.REVIEW_PR
         assert response.message == "Test message"
         assert response.agent_results == []
-        assert response.questions == []
+        assert response.summary == {}
 
 
 if __name__ == "__main__":
