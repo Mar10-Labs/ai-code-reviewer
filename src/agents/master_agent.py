@@ -72,10 +72,10 @@ class MasterAgent:
         
         if re.search(r'execute\s+#?\d+|issue\s+#?\d+', text_lower):
             return Intent.EXECUTE_ISSUE
-        if any(word in text_lower for word in ['status', 'estado', 'git', 'branch']):
-            return Intent.CHECK_STATUS
         if 'branch' in text_lower and ('create' in text_lower or 'new' in text_lower):
             return Intent.CREATE_BRANCH
+        if any(word in text_lower for word in ['status', 'estado', 'git']):
+            return Intent.CHECK_STATUS
         if any(word in text_lower for word in ['commit', 'commits']):
             return Intent.COMMIT_CHANGES
         if any(word in text_lower for word in ['merge', 'pr', 'pull request']):
