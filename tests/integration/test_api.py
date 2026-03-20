@@ -48,7 +48,7 @@ class TestAgentEndpoints:
         assert response.status_code == 200
         data = response.json()
         assert "message" in data
-        assert "agents" in data
+        assert "graph" in data or "nodes" in data
 
     def test_post_command_review(self, client):
         response = client.post(

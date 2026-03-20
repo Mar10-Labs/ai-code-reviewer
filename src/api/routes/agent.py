@@ -37,7 +37,8 @@ async def review_pr(diff_content: str, repository: str = "", pr_number: int = 0)
 async def get_status():
     return {
         "message": "AI Code Reviewer is running",
-        "agents": [a.config.name for a in master.agents]
+        "graph": "LangGraph StateGraph",
+        "nodes": ["security", "code_quality", "performance", "documentation", "testing", "aggregate"]
     }
 
 

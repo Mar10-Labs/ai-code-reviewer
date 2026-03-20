@@ -13,3 +13,5 @@ typing_extensions==4.15.0
 uvicorn==0.30.0
 pytest==8.0.0
 pytest-cov==4.1.0
+langgraph==0.2.56
+langchain-core==0.3.24
