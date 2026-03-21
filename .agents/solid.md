@@ -10,6 +10,32 @@ Verifico que el código cumpla con principios SOLID.
 - **I**nterface Segregation: ¿Interfaces pequeñas y específicas?
 - **D**ependency Inversion: ¿Depende de abstracciones, no concreciones?
 
+### Patrones de Resilience (obligatorios para sistemas con IA)
+
+| Patrón | Cuándo aplicar | Qué hace |
+|--------|----------------|----------|
+| **Circuit Breaker** | Llamadas a servicios externos (GitHub, LLM) | Corta el circuito después de N fallos |
+| **Retry + Backoff** | Errores transitorios (timeout, 503) | Reintenta con espera exponencial |
+| **Fallback** | Cuando el servicio principal falla | Ejecuta alternativa (cache, default) |
+| **Timeout** | Toda llamada externa | Nunca esperar más de X segundos |
+| **Bulkhead** | Múltiples servicios | Aislar failures entre componentes |
+| **Rate Limiter** | APIs externas (GitHub tiene límites) | Controlar frecuencia de requests |
+
+## Verificación de Resilience
+
+### ¿Se implementó?
+- [ ] Circuit Breaker para llamadas LLM
+- [ ] Retry con exponential backoff
+- [ ] Timeout en todas las llamadas HTTP
+- [ ] Fallback cuando LLM no responde
+- [ ] Rate limiting para GitHub API
+
+### Anti-patterns a evitar
+- ❌ Sin timeout → infinite wait
+- ❌ Sin retry → primer error pierde todo
+- ❌ Sin circuit breaker → cascade failure
+- ❌ Sin fallback → sistema totalmente down
+
 ## Cuando intervenir
 Este agente interviene cuando:
 - Se crean nuevas clases
