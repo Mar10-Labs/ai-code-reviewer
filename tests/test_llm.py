@@ -3,9 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.llm.ports.llm_port import LLMPort, LLMResponse, LLMConfig
 from src.llm.factory import LLMFactory, get_llm, get_standard_llm, get_premium_llm
-from src.llm.adapters.groq_adapter import GroqAdapter
-from src.llm.adapters.gemini_adapter import GeminiAdapter
-from src.llm.adapters.ollama_adapter import OllamaAdapter
+from src.llm.adapters.llm_adapter import LLMAdapter
 
 
 class TestLLMConfig:
@@ -53,86 +51,90 @@ class TestLLMResponse:
         assert response.latency_ms is None
 
 
-class TestGroqAdapter:
-    def test_provider_name(self):
-        adapter = GroqAdapter(api_key="test-key")
+class TestLLMAdapter:
+    def test_provider_name_groq(self):
+        adapter = LLMAdapter(provider="groq", api_key="test-key")
         assert adapter.get_provider_name() == "groq"
 
-    def test_is_available_with_key(self):
-        adapter = GroqAdapter(api_key="test-key")
-        assert adapter.is_available() is True
-
-    def test_is_available_without_key(self):
-        adapter = GroqAdapter(api_key=None)
-        assert adapter.is_available() is False
-
-    @pytest.mark.asyncio
-    async def test_complete_requires_api_key(self):
-        adapter = GroqAdapter(api_key=None)
-        with pytest.raises(RuntimeError, match="not configured"):
-            await adapter.complete("test prompt")
-
-
-class TestGeminiAdapter:
-    def test_provider_name(self):
-        adapter = GeminiAdapter(api_key="test-key")
+    def test_provider_name_gemini(self):
+        adapter = LLMAdapter(provider="gemini", api_key="test-key")
         assert adapter.get_provider_name() == "gemini"
 
+    def test_provider_name_ollama(self):
+        adapter = LLMAdapter(provider="ollama", api_key="test-key")
+        assert adapter.get_provider_name() == "ollama"
+
     def test_is_available_with_key(self):
-        adapter = GeminiAdapter(api_key="test-key")
+        adapter = LLMAdapter(provider="groq", api_key="test-key")
         assert adapter.is_available() is True
 
     def test_is_available_without_key(self):
-        adapter = GeminiAdapter(api_key=None)
+        adapter = LLMAdapter(provider="groq", api_key=None)
         assert adapter.is_available() is False
+
+    def test_default_model_groq(self):
+        adapter = LLMAdapter(provider="groq", api_key="test")
+        assert adapter.model == "llama-3.3-70b-versatile"
+
+    def test_default_model_gemini(self):
+        adapter = LLMAdapter(provider="gemini", api_key="test")
+        assert adapter.model == "gemini-1.5-flash"
+
+    def test_custom_model(self):
+        adapter = LLMAdapter(provider="groq", api_key="test", model="custom-model")
+        assert adapter.model == "custom-model"
+
+    def test_base_url_groq(self):
+        adapter = LLMAdapter(provider="groq", api_key="test")
+        assert "api.groq.com" in adapter.base_url
+
+    def test_base_url_gemini(self):
+        adapter = LLMAdapter(provider="gemini", api_key="test")
+        assert "generativelanguage.googleapis.com" in adapter.base_url
 
     @pytest.mark.asyncio
     async def test_complete_requires_api_key(self):
-        adapter = GeminiAdapter(api_key=None)
+        adapter = LLMAdapter(provider="groq", api_key=None)
         with pytest.raises(RuntimeError, match="not configured"):
             await adapter.complete("test prompt")
-
-
-class TestOllamaAdapter:
-    def test_provider_name(self):
-        adapter = OllamaAdapter()
-        assert adapter.get_provider_name() == "ollama"
-
-    def test_default_values(self):
-        adapter = OllamaAdapter()
-        assert adapter.base_url == "http://localhost:11434"
-        assert adapter.model == "llama3.2"
 
 
 class TestLLMFactory:
-    def test_create_ollama_default(self):
-        with patch.dict("os.environ", {}, clear=True):
-            adapter = LLMFactory.create("ollama")
-            assert isinstance(adapter, OllamaAdapter)
-
     def test_create_groq(self):
-        with patch.dict("os.environ", {"GROQ_API_KEY": "test-key"}, clear=True):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test-key"}, clear=True):
             adapter = LLMFactory.create("groq")
-            assert isinstance(adapter, GroqAdapter)
-            assert adapter.api_key == "test-key"
+            assert isinstance(adapter, LLMAdapter)
+            assert adapter.provider == "groq"
 
     def test_create_gemini(self):
-        with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}, clear=True):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test-key"}, clear=True):
             adapter = LLMFactory.create("gemini")
-            assert isinstance(adapter, GeminiAdapter)
-            assert adapter.api_key == "test-key"
+            assert isinstance(adapter, LLMAdapter)
+            assert adapter.provider == "gemini"
 
-    def test_create_unknown_raises(self):
-        with pytest.raises(ValueError, match="Unknown LLM provider"):
-            LLMFactory.create("unknown-provider")
+    def test_create_ollama(self):
+        adapter = LLMFactory.create("ollama")
+        assert isinstance(adapter, LLMAdapter)
+        assert adapter.provider == "ollama"
+
+    def test_create_standard_sets_model(self):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test"}, clear=True):
+            adapter = LLMFactory.create_standard("groq")
+            assert adapter.model == "llama-3.3-70b-versatile"
+
+    def test_create_premium_sets_model(self):
+        with patch.dict("os.environ", {"LLM_API_KEY": "test"}, clear=True):
+            adapter = LLMFactory.create_premium("groq")
+            assert adapter.model == "llama-3.3-70b-versatile"
 
     def test_get_available_providers(self):
         providers = LLMFactory.get_available_providers()
-        assert len(providers) == 3
+        assert len(providers) == 4
         names = [p["name"] for p in providers]
         assert "groq" in names
         assert "gemini" in names
         assert "ollama" in names
+        assert "openai" in names
 
 
 class TestConvenienceFunctions:
