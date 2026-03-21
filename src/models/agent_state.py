@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, timezone
 
 from src.models.review_comment import ReviewComment
+from src.models.file_context import EnrichedFileContext
 
 
 def utc_now():
@@ -16,6 +17,7 @@ class EnrichedDiff(BaseModel):
     num_additions: int
     num_deletions: int
     chunks: list[str] = Field(default_factory=list)
+    file_context: Optional[EnrichedFileContext] = None
 
 
 class AgentState(BaseModel):
@@ -35,6 +37,7 @@ class AgentState(BaseModel):
     repository: str
     current_file: Optional[str] = None
     enriched_diffs: list[EnrichedDiff] = Field(default_factory=list)
+    enriched_contexts: list[EnrichedFileContext] = Field(default_factory=list)
     review_comments: list[ReviewComment] = Field(default_factory=list)
     agent_name: Optional[str] = None
     status: Literal["pending", "processing", "completed", "failed"] = "pending"
