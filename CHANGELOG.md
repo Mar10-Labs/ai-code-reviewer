@@ -7,13 +7,25 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 ## [Unreleased]
 
 ### Added
+- PromptCache para caching de system prompts con TTL configurable
+- SemanticChunker para dividir archivos grandes por funciones/clases
+- QueueLock para PR-level locking y exponential backoff
+- Webhook HMAC validation con replay protection
+
+### Changed
+- LLMFactory usa LiteLLM como adapter unificado
+
+## [1.0.1] - 2026-03-21
+
+### Added
 - Cola asíncrona con asyncio.Queue para procesar eventos en background
-- Sistema de idempotencia con deduplicación por delivery_id
+- Sistema de idempotencia con deduplicación por delivery_id y TTL
 - EventStore con SQLite para persistencia de eventos
 - Worker que procesa la cola con retry automático (max 3 intentos)
 - Endpoint `/agent/webhook/github` para recibir eventos de GitHub
 - Endpoint `/agent/queue/status` para monitorear la cola
 - Tests para el sistema de cola (10 tests nuevos)
+- LiteLLM adapter unificado para 100+ providers
 
 ## [1.0.0] - 2026-03-20
 
