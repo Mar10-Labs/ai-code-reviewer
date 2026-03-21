@@ -6,7 +6,6 @@ from src.llm.factory import LLMFactory, get_llm, get_standard_llm, get_premium_l
 from src.llm.adapters.groq_adapter import GroqAdapter
 from src.llm.adapters.gemini_adapter import GeminiAdapter
 from src.llm.adapters.ollama_adapter import OllamaAdapter
-from src.llm.adapters.litellm_adapter import LiteLLMAdapter
 
 
 class TestLLMConfig:
@@ -106,24 +105,30 @@ class TestOllamaAdapter:
 
 
 class TestLLMFactory:
-    def test_create_ollama(self):
+    def test_create_ollama_default(self):
         with patch.dict("os.environ", {}, clear=True):
             adapter = LLMFactory.create("ollama")
-            assert isinstance(adapter, LLMPort)
+            assert isinstance(adapter, OllamaAdapter)
 
     def test_create_groq(self):
         with patch.dict("os.environ", {"GROQ_API_KEY": "test-key"}, clear=True):
             adapter = LLMFactory.create("groq")
-            assert isinstance(adapter, LLMPort)
+            assert isinstance(adapter, GroqAdapter)
+            assert adapter.api_key == "test-key"
 
     def test_create_gemini(self):
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test-key"}, clear=True):
             adapter = LLMFactory.create("gemini")
-            assert isinstance(adapter, LLMPort)
+            assert isinstance(adapter, GeminiAdapter)
+            assert adapter.api_key == "test-key"
+
+    def test_create_unknown_raises(self):
+        with pytest.raises(ValueError, match="Unknown LLM provider"):
+            LLMFactory.create("unknown-provider")
 
     def test_get_available_providers(self):
         providers = LLMFactory.get_available_providers()
-        assert len(providers) >= 3
+        assert len(providers) == 3
         names = [p["name"] for p in providers]
         assert "groq" in names
         assert "gemini" in names
