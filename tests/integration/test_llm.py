@@ -7,22 +7,30 @@ from src.llm.ports.llm_port import LLMResponse, LLMConfig
 from src.llm.adapters.llm_adapter import LLMAdapter
 
 
+def create_mock_response(status=200, data=None):
+    mock_response = MagicMock()
+    mock_response.status_code = status
+    mock_response.json.return_value = data or {}
+    return mock_response
+
+
 class TestLLMAdapterGroqIntegration:
     @pytest.mark.asyncio
     async def test_complete_with_mock(self):
         adapter = LLMAdapter(provider="groq", api_key="test-key")
         
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+        mock_response = create_mock_response(200, {
             "choices": [{"message": {"content": "Test response"}}],
             "model": "llama-3.3-70b-versatile",
             "usage": {"total_tokens": 10}
-        }
+        })
         
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post, \
-             patch("src.llm.adapters.llm_adapter.db") as mock_db:
-            mock_post.return_value = mock_response
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_instance = AsyncMock()
+            mock_instance.post.return_value = mock_response
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock()
+            mock_client_class.return_value = mock_instance
             
             response = await adapter.complete("Hello")
             
@@ -34,9 +42,7 @@ class TestLLMAdapterGroqIntegration:
     async def test_complete_structured_with_mock(self):
         adapter = LLMAdapter(provider="groq", api_key="test-key")
         
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+        mock_response = create_mock_response(200, {
             "choices": [{
                 "message": {
                     "content": '{"file_path": "test.py", "severity": "warning"}'
@@ -44,7 +50,7 @@ class TestLLMAdapterGroqIntegration:
             }],
             "model": "llama-3.3-70b-versatile",
             "usage": {"total_tokens": 50}
-        }
+        })
         
         schema = {
             "type": "object",
@@ -54,9 +60,12 @@ class TestLLMAdapterGroqIntegration:
             }
         }
         
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post, \
-             patch("src.llm.adapters.llm_adapter.db") as mock_db:
-            mock_post.return_value = mock_response
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_instance = AsyncMock()
+            mock_instance.post.return_value = mock_response
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock()
+            mock_client_class.return_value = mock_instance
             
             response = await adapter.complete_structured("Review this", schema)
             
@@ -68,12 +77,15 @@ class TestLLMAdapterGroqIntegration:
     async def test_complete_handles_error(self):
         adapter = LLMAdapter(provider="groq", api_key="test-key")
         
-        mock_response = MagicMock()
-        mock_response.status_code = 401
+        mock_response = create_mock_response(401, {})
         mock_response.text = "Unauthorized"
         
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_instance = AsyncMock()
+            mock_instance.post.return_value = mock_response
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock()
+            mock_client_class.return_value = mock_instance
             
             with pytest.raises(RuntimeError, match="401"):
                 await adapter.complete("Hello")
@@ -84,19 +96,20 @@ class TestLLMAdapterGeminiIntegration:
     async def test_complete_with_mock(self):
         adapter = LLMAdapter(provider="gemini", api_key="test-key", model="gemini-1.5-flash")
         
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+        mock_response = create_mock_response(200, {
             "candidates": [{
                 "content": {
                     "parts": [{"text": "Gemini response"}]
                 }
             }]
-        }
+        })
         
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post, \
-             patch("src.llm.adapters.llm_adapter.db") as mock_db:
-            mock_post.return_value = mock_response
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_instance = AsyncMock()
+            mock_instance.post.return_value = mock_response
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock()
+            mock_client_class.return_value = mock_instance
             
             response = await adapter.complete("Hello")
             
@@ -109,15 +122,17 @@ class TestLLMAdapterOllamaIntegration:
     async def test_complete_with_mock(self):
         adapter = LLMAdapter(provider="ollama", api_key="ollama")
         
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+        mock_response = create_mock_response(200, {
             "choices": [{"message": {"content": "Ollama response"}}],
             "usage": {"total_tokens": 5}
-        }
+        })
         
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-            mock_post.return_value = mock_response
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_instance = AsyncMock()
+            mock_instance.post.return_value = mock_response
+            mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+            mock_instance.__aexit__ = AsyncMock()
+            mock_client_class.return_value = mock_instance
             
             response = await adapter.complete("Hello")
             
