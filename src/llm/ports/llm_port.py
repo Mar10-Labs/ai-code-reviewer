@@ -11,6 +11,13 @@ class LLMResponse:
     tokens_used: Optional[int] = None
     cost_usd: Optional[float] = None
     latency_ms: Optional[float] = None
+    providers_tried: list[str] = None
+    is_fallback: bool = False
+    fallback_reason: Optional[str] = None
+    
+    def __post_init__(self):
+        if self.providers_tried is None:
+            self.providers_tried = []
 
 
 @dataclass
