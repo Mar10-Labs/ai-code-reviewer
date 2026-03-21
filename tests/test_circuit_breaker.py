@@ -206,20 +206,25 @@ class TestLLMCircuitBreakerAdapter:
         assert cb_adapter.is_available() is True
 
     def test_is_unavailable_when_circuit_open(self):
-        from src.llm.adapters.groq_adapter import GroqAdapter
         from src.llm.adapters.circuit_breaker_adapter import LLMCircuitBreakerAdapter
         from src.infrastructure.resilience.circuit_breaker import CircuitBreakerConfig, CircuitBreakerOpen
+        from src.llm.ports.llm_port import LLMResponse
+        import asyncio
         
-        adapter = GroqAdapter(api_key="test")
-        adapter._available = True
+        class FailingAdapter:
+            def get_provider_name(self):
+                return "failing"
+            def is_available(self):
+                return True
+            async def complete(self, prompt, config=None):
+                raise RuntimeError("Test failure")
+            async def complete_structured(self, prompt, schema, config=None):
+                raise RuntimeError("Test failure")
         
+        adapter = FailingAdapter()
         config = CircuitBreakerConfig(failure_threshold=1, timeout=60)
         cb_adapter = LLMCircuitBreakerAdapter(adapter, config=config)
         
-        async def failing_call():
-            raise RuntimeError("Test failure")
-        
-        import asyncio
         try:
             asyncio.run(cb_adapter.complete("test"))
         except (RuntimeError, CircuitBreakerOpen):
@@ -237,17 +242,23 @@ class TestLLMCircuitBreakerAdapter:
         assert cb_adapter.circuit_breaker is cb_adapter._circuit_breaker
 
     def test_reset_circuit_breaker(self):
-        from src.llm.adapters.groq_adapter import GroqAdapter
         from src.llm.adapters.circuit_breaker_adapter import LLMCircuitBreakerAdapter
         from src.infrastructure.resilience.circuit_breaker import CircuitBreakerConfig, CircuitState, CircuitBreakerOpen
         import asyncio
         
-        adapter = GroqAdapter(api_key="test")
+        class FailingAdapter:
+            def get_provider_name(self):
+                return "failing"
+            def is_available(self):
+                return True
+            async def complete(self, prompt, config=None):
+                raise RuntimeError("Test failure")
+            async def complete_structured(self, prompt, schema, config=None):
+                raise RuntimeError("Test failure")
+        
+        adapter = FailingAdapter()
         config = CircuitBreakerConfig(failure_threshold=1, timeout=60)
         cb_adapter = LLMCircuitBreakerAdapter(adapter, config=config)
-        
-        async def failing_call():
-            raise RuntimeError("Test failure")
         
         try:
             asyncio.run(cb_adapter.complete("test"))
