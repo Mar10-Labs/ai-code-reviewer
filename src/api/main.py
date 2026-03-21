@@ -1,6 +1,9 @@
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from src.api.routes import health_router
 from src.api.routes import agent_router
+
+load_dotenv()
 
 
 app = FastAPI(title="AI Code Reviewer", 

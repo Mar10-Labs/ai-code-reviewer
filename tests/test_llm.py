@@ -69,16 +69,18 @@ class TestLLMAdapter:
         assert adapter.is_available() is True
 
     def test_is_available_without_key(self):
-        adapter = LLMAdapter(provider="groq", api_key=None)
-        assert adapter.is_available() is False
+        with patch.dict("os.environ", {"LLM_API_KEY": ""}, clear=True):
+            adapter = LLMAdapter(provider="groq", api_key="")
+            assert adapter.is_available() is False
 
     def test_default_model_groq(self):
         adapter = LLMAdapter(provider="groq", api_key="test")
         assert adapter.model == "llama-3.3-70b-versatile"
 
     def test_default_model_gemini(self):
-        adapter = LLMAdapter(provider="gemini", api_key="test")
-        assert adapter.model == "gemini-1.5-flash"
+        with patch.dict("os.environ", {"LLM_MODEL": ""}, clear=True):
+            adapter = LLMAdapter(provider="gemini", api_key="test")
+            assert adapter.model == "gemini-1.5-flash"
 
     def test_custom_model(self):
         adapter = LLMAdapter(provider="groq", api_key="test", model="custom-model")
@@ -94,9 +96,10 @@ class TestLLMAdapter:
 
     @pytest.mark.asyncio
     async def test_complete_requires_api_key(self):
-        adapter = LLMAdapter(provider="groq", api_key=None)
-        with pytest.raises(RuntimeError, match="not configured"):
-            await adapter.complete("test prompt")
+        with patch.dict("os.environ", {"LLM_API_KEY": ""}, clear=True):
+            adapter = LLMAdapter(provider="groq", api_key="")
+            with pytest.raises(RuntimeError, match="not configured"):
+                await adapter.complete("test prompt")
 
 
 class TestLLMFactory:
