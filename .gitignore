@@ -208,3 +208,9 @@ __marimo__/
 
 # Agents
 .agents/
+
+# Local files
+NOTAS.txt
+data/events.db
+docs/
+session-*.md
