@@ -4,6 +4,7 @@ import json
 from typing import Optional
 
 from src.llm.ports.llm_port import LLMPort, LLMResponse, LLMConfig
+from src.infrastructure.services.db import db, calculate_cost
 
 
 class GroqAdapter(LLMPort):
@@ -55,13 +56,23 @@ class GroqAdapter(LLMPort):
             raise RuntimeError(f"Groq API error: {response.status_code} - {response.text}")
 
         data = response.json()
+        tokens = data.get("usage", {}).get("total_tokens", 0)
+        cost = calculate_cost(self.model, tokens)
+        
+        db.save_metric(
+            provider="groq",
+            model=self.model,
+            tokens_used=tokens,
+            cost_usd=cost,
+            latency_ms=latency
+        )
 
         return LLMResponse(
             content=data["choices"][0]["message"]["content"],
             model=data["model"],
             provider="groq",
-            tokens_used=data.get("usage", {}).get("total_tokens", 0),
-            cost_usd=0,  # Free tier
+            tokens_used=tokens,
+            cost_usd=cost,
             latency_ms=latency
         )
 
@@ -114,17 +125,27 @@ JSON Response:"""
 
         data = response.json()
         content = data["choices"][0]["message"]["content"]
+        tokens = data.get("usage", {}).get("total_tokens", 0)
+        cost = calculate_cost(self.model, tokens)
 
         try:
             json.loads(content)
         except json.JSONDecodeError:
             raise RuntimeError("Groq did not return valid JSON")
 
+        db.save_metric(
+            provider="groq",
+            model=self.model,
+            tokens_used=tokens,
+            cost_usd=cost,
+            latency_ms=latency
+        )
+
         return LLMResponse(
             content=content,
             model=data["model"],
             provider="groq",
-            tokens_used=data.get("usage", {}).get("total_tokens", 0),
-            cost_usd=0,
+            tokens_used=tokens,
+            cost_usd=cost,
             latency_ms=latency
         )

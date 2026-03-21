@@ -3,7 +3,7 @@ import os
 import tempfile
 from datetime import datetime
 
-from src.infrastructure.services.db import Database
+from src.infrastructure.services.db import Database, calculate_cost
 from src.models.agent_state import AgentState
 from src.models.review_comment import ReviewComment
 
@@ -132,6 +132,24 @@ class TestDatabase:
         id2 = temp_db.save_review(state)
         
         assert id1 != id2
+
+
+class TestCostCalculation:
+    def test_calculate_cost_groq(self):
+        cost = calculate_cost("groq/llama-3.3-70b-versatile", 1000)
+        assert cost == 0.0007
+
+    def test_calculate_cost_gemini(self):
+        cost = calculate_cost("gemini/gemini-1.5-flash", 1000)
+        assert cost == 0.000075
+
+    def test_calculate_cost_unknown(self):
+        cost = calculate_cost("unknown/model", 1000)
+        assert cost == 0.0001
+
+    def test_calculate_cost_zero_tokens(self):
+        cost = calculate_cost("groq/model", 0)
+        assert cost == 0
 
 
 if __name__ == "__main__":

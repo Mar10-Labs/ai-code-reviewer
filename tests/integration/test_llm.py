@@ -22,7 +22,8 @@ class TestGroqIntegration:
             "usage": {"total_tokens": 10}
         }
         
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post, \
+             patch("src.llm.adapters.groq_adapter.db") as mock_db:
             mock_post.return_value = mock_response
             
             response = await adapter.complete("Hello")
@@ -30,6 +31,7 @@ class TestGroqIntegration:
             assert response.content == "Test response"
             assert response.provider == "groq"
             assert response.tokens_used == 10
+            assert response.cost_usd > 0
 
     @pytest.mark.asyncio
     async def test_complete_structured_with_mock(self):
@@ -55,7 +57,8 @@ class TestGroqIntegration:
             }
         }
         
-        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post, \
+             patch("src.llm.adapters.groq_adapter.db") as mock_db:
             mock_post.return_value = mock_response
             
             response = await adapter.complete_structured("Review this", schema)
