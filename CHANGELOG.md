@@ -15,6 +15,23 @@ El formato está basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1
 ### Changed
 - LLMFactory usa LiteLLM como adapter unificado
 
+## [1.1.0] - 2026-03-21
+
+### Added
+- Cost tracking real con `calculate_cost()` para modelos Groq/Gemini
+- Métricas de uso persistidas en SQLite (`db.save_metric()`)
+- `get_cost_by_repo()` para consultar costos por repositorio
+- `DeterministicValidator` para validación híbrida LLM + reglas
+- 17 tests para git_client.py
+- 8 tests para circuit_breaker_adapter.py
+- 9 tests para agent routes
+
+### Changed
+- Coverage mejorado a 91% (332 tests)
+
+### Fixed
+- Bug en `get_file_history()` donde append estaba en bloque incorrecto
+
 ## [1.0.1] - 2026-03-21
 
 ### Added

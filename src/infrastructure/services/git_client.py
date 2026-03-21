@@ -147,15 +147,15 @@ class GitClient:
                             date = datetime.now()
                     else:
                         date = datetime.now()
-                        
-                        history.append(GitHistory(
-                            commit_hash=commit_hash,
-                            author="",
-                            date=date,
-                            message=message,
-                            lines_added=0,
-                            lines_deleted=0
-                        ))
+                    
+                    history.append(GitHistory(
+                        commit_hash=commit_hash,
+                        author="",
+                        date=date,
+                        message=message,
+                        lines_added=0,
+                        lines_deleted=0
+                    ))
                         
         except Exception:
             pass

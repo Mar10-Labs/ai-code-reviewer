@@ -1,10 +1,23 @@
 import sqlite3
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from contextlib import contextmanager
 
 from src.models.agent_state import AgentState, ReviewComment
+
+
+COST_PER_1K_TOKENS = {
+    "groq/llama-3.3-70b-versatile": 0.0007,
+    "gemini/gemini-1.5-flash": 0.000075,
+    "openai/gpt-4o-mini": 0.00015,
+    "anthropic/claude-3-haiku-20240307": 0.00025,
+}
+
+
+def calculate_cost(model: str, tokens: int) -> float:
+    price = COST_PER_1K_TOKENS.get(model, 0.0001)
+    return round((tokens / 1000) * price, 6)
 
 
 class Database:
@@ -161,9 +174,20 @@ class Database:
             return {
                 "total_requests": total["count"] or 0,
                 "total_tokens": total_tokens["total"] or 0,
-                "total_cost_usd": total_cost["total"] or 0.0,
-                "avg_latency_ms": avg_latency["avg"] or 0.0
+                "total_cost_usd": round(total_cost["total"] or 0.0, 6),
+                "avg_latency_ms": round(avg_latency["avg"] or 0.0, 2)
             }
+
+    def get_cost_by_repo(self) -> dict:
+        with self._get_connection() as conn:
+            rows = conn.execute("""
+                SELECT r.repository, SUM(m.cost_usd) as cost, COUNT(*) as requests
+                FROM metrics m
+                JOIN reviews r ON m.review_id = r.id
+                GROUP BY r.repository
+                ORDER BY cost DESC
+            """).fetchall()
+            return [{"repo": r["repository"], "cost": round(r["cost"] or 0, 6), "requests": r["requests"]} for r in rows]
 
 
 db = Database()
