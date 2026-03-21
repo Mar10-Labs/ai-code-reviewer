@@ -2,6 +2,7 @@ import pytest
 import hmac
 import hashlib
 import time
+from unittest.mock import patch
 
 from src.infrastructure.services.webhook_validator import (
     WebhookValidator,
@@ -14,8 +15,9 @@ from src.infrastructure.services.webhook_validator import (
 
 class TestWebhookValidator:
     def test_validate_without_secret(self):
-        validator = WebhookValidator(secret="")
-        assert validator.verify_signature(b"payload", "sha256=abc") is True
+        with patch.dict("os.environ", {"GITHUB_WEBHOOK_SECRET": ""}, clear=True):
+            validator = WebhookValidator(secret="")
+            assert validator.verify_signature(b"payload", "sha256=abc") is True
 
     def test_validate_with_correct_signature(self):
         secret = "test_secret"
@@ -126,7 +128,8 @@ class TestValidateWebhookSignature:
         assert validate_webhook_signature(payload, signature, secret) is True
 
     def test_validate_without_secret(self):
-        assert validate_webhook_signature(b"payload", "sha256=anything", None) is True
+        with patch.dict("os.environ", {"GITHUB_WEBHOOK_SECRET": ""}, clear=True):
+            assert validate_webhook_signature(b"payload", "sha256=anything", None) is True
 
 
 class TestParseGitHubWebhook:
