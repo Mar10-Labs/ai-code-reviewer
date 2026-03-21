@@ -148,7 +148,7 @@ class TestWebhookEndpoint:
     def test_webhook_valid_pr_opened(self, mock_validator, mock_queue, client):
         mock_validator.validate_hmac.return_value = True
         mock_queue.is_duplicate.return_value = False
-        mock_queue.enqueue = AsyncMock(return_value=True)
+        mock_queue.enqueue.return_value = True
 
         payload = {
             "action": "opened",
@@ -172,13 +172,10 @@ class TestWebhookEndpoint:
         assert response.status_code == 200
         assert response.json()["status"] == "queued"
 
-    @pytest.mark.skip(reason="Mock not working due to TestClient app loading order")
-    @patch("src.api.routes.agent.WebhookValidator")
-    def test_webhook_invalid_signature(self, mock_validator_class, client):
-        mock_instance = MagicMock()
-        mock_instance.validate_hmac = lambda *args, **kwargs: False
-        mock_validator_class.return_value = mock_instance
-        
+    @patch("src.api.routes.agent.webhook_validator")
+    def test_webhook_invalid_signature(self, mock_validator, client):
+        mock_validator.validate_hmac.return_value = False
+
         response = client.post(
             "/agent/webhook/github",
             headers={
@@ -195,7 +192,7 @@ class TestWebhookEndpoint:
     def test_webhook_with_hmac_signature(self, mock_validator, mock_queue, client):
         mock_validator.validate_hmac.return_value = True
         mock_queue.is_duplicate.return_value = False
-        mock_queue.enqueue = AsyncMock(return_value=True)
+        mock_queue.enqueue.return_value = True
 
         payload = {
             "action": "synchronize",

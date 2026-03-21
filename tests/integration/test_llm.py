@@ -3,11 +3,10 @@ import json
 from unittest.mock import patch, AsyncMock, MagicMock
 
 from src.llm.factory import LLMFactory
-from src.llm.ports.llm_port import LLMResponse, LLMConfig, LLMPort
+from src.llm.ports.llm_port import LLMResponse, LLMConfig
 from src.llm.adapters.groq_adapter import GroqAdapter
 from src.llm.adapters.gemini_adapter import GeminiAdapter
 from src.llm.adapters.ollama_adapter import OllamaAdapter
-from src.llm.adapters.litellm_adapter import LiteLLMAdapter
 
 
 class TestGroqIntegration:
@@ -136,28 +135,30 @@ class TestGeminiIntegration:
 
 
 class TestLLMFactoryIntegration:
-    def test_factory_creates_adapter_for_ollama(self):
+    def test_factory_creates_ollama_by_default(self):
         with patch.dict("os.environ", {}, clear=True):
             adapter = LLMFactory.create("ollama")
-            assert isinstance(adapter, LLMPort)
+            assert isinstance(adapter, OllamaAdapter)
 
-    def test_factory_creates_adapter_for_groq(self):
+    def test_factory_creates_groq_with_api_key(self):
         with patch.dict("os.environ", {"GROQ_API_KEY": "test"}, clear=True):
             adapter = LLMFactory.create("groq")
-            assert isinstance(adapter, LLMPort)
+            assert isinstance(adapter, GroqAdapter)
+            assert adapter.api_key == "test"
 
-    def test_factory_creates_adapter_for_gemini(self):
+    def test_factory_creates_gemini_with_api_key(self):
         with patch.dict("os.environ", {"GEMINI_API_KEY": "test"}, clear=True):
             adapter = LLMFactory.create("gemini")
-            assert isinstance(adapter, LLMPort)
+            assert isinstance(adapter, GeminiAdapter)
+            assert adapter.api_key == "test"
 
-    def test_factory_model_selection(self):
+    def test_factory_standard_model_selection(self):
         with patch.dict("os.environ", {}, clear=True):
             standard = LLMFactory.create_standard("ollama")
             premium = LLMFactory.create_premium("ollama")
             
-            assert "ollama" in standard.model
-            assert "ollama" in premium.model
+            assert standard.model == "llama3.2"
+            assert premium.model == "llama3.2"
 
 
 class TestLLMPortContract:
@@ -166,7 +167,6 @@ class TestLLMPortContract:
             GroqAdapter(api_key="test"),
             GeminiAdapter(api_key="test"),
             OllamaAdapter(),
-            LiteLLMAdapter(provider="openai", api_key="test"),
         ]
         
         for adapter in adapters:
