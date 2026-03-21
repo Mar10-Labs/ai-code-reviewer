@@ -205,3 +205,12 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Agents
+.agents/
+
+# Local files
+NOTAS.txt
+data/events.db
+docs/
+session-*.md
