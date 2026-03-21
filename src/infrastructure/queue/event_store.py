@@ -1,8 +1,7 @@
 from typing import Optional
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from enum import Enum
 from pydantic import BaseModel, Field
-import threading
 
 import sqlite3
 from pathlib import Path
@@ -37,32 +36,9 @@ class ReviewEvent(BaseModel):
         use_enum_values = True
 
 
-class IdempotencyConfig:
-    DEFAULT_TTL_DAYS: int = 7
-    CLEANUP_INTERVAL_HOURS: int = 24
-
-    def __init__(
-        self,
-        ttl_days: int = DEFAULT_TTL_DAYS,
-        cleanup_interval_hours: int = CLEANUP_INTERVAL_HOURS,
-        auto_cleanup: bool = True
-    ):
-        self.ttl_days = ttl_days
-        self.cleanup_interval_hours = cleanup_interval_hours
-        self.auto_cleanup = auto_cleanup
-
-
 class EventStore:
-    _cleanup_lock = threading.Lock()
-    _last_cleanup: Optional[datetime] = None
-
-    def __init__(
-        self,
-        db_path: str = "data/events.db",
-        idempotency_config: Optional[IdempotencyConfig] = None
-    ):
+    def __init__(self, db_path: str = "data/events.db"):
         self.db_path = db_path
-        self.idempotency_config = idempotency_config or IdempotencyConfig()
         self._ensure_db_dir()
         self._init_db()
 
@@ -82,29 +58,19 @@ class EventStore:
                     error_message TEXT,
                     created_at TEXT NOT NULL,
                     processed_at TEXT,
-                    retry_count INTEGER DEFAULT 0,
-                    idempotency_key TEXT
+                    retry_count INTEGER DEFAULT 0
                 )
             """)
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_events_status
+                CREATE INDEX IF NOT EXISTS idx_events_status 
                 ON events(status)
             """)
             conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_events_repository
+                CREATE INDEX IF NOT EXISTS idx_events_repository 
                 ON events(repository)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_events_idempotency_key
-                ON events(idempotency_key)
-            """)
-            conn.execute("""
-                CREATE INDEX IF NOT EXISTS idx_events_created_at
-                ON events(created_at)
             """)
 
     def exists(self, delivery_id: str) -> bool:
-        self._maybe_cleanup()
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
                 "SELECT 1 FROM events WHERE delivery_id = ?",
@@ -112,46 +78,7 @@ class EventStore:
             )
             return cursor.fetchone() is not None
 
-    def get_by_idempotency_key(self, idempotency_key: str) -> Optional[ReviewEvent]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute(
-                "SELECT * FROM events WHERE idempotency_key = ?",
-                (idempotency_key,)
-            )
-            row = cursor.fetchone()
-            if row:
-                return self._row_to_event(row)
-        return None
-
-    def _maybe_cleanup(self):
-        if not self.idempotency_config.auto_cleanup:
-            return
-
-        with EventStore._cleanup_lock:
-            now = datetime.now(timezone.utc)
-            if EventStore._last_cleanup is None:
-                EventStore._last_cleanup = now
-                return
-
-            hours_since = (now - EventStore._last_cleanup).total_seconds() / 3600
-            if hours_since >= self.idempotency_config.cleanup_interval_hours:
-                self.cleanup_old_events()
-                EventStore._last_cleanup = now
-
-    def cleanup_old_events(self, ttl_days: int = None) -> int:
-        ttl = ttl_days or self.idempotency_config.ttl_days
-        cutoff = datetime.now(timezone.utc) - timedelta(days=ttl)
-
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "DELETE FROM events WHERE created_at < ?",
-                (cutoff.isoformat(),)
-            )
-            return cursor.rowcount
-
-    def save(self, event: ReviewEvent, idempotency_key: Optional[str] = None) -> bool:
-        self._maybe_cleanup()
+    def save(self, event: ReviewEvent) -> bool:
         if self.exists(event.delivery_id):
             return False
 
@@ -160,8 +87,8 @@ class EventStore:
                 INSERT INTO events (
                     delivery_id, event_type, repository, pr_number,
                     diff_content, status, error_message, created_at,
-                    processed_at, retry_count, idempotency_key
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    processed_at, retry_count
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 event.delivery_id,
                 event.event_type.value if isinstance(event.event_type, Enum) else event.event_type,
@@ -172,52 +99,36 @@ class EventStore:
                 event.error_message,
                 event.created_at.isoformat(),
                 event.processed_at.isoformat() if event.processed_at else None,
-                event.retry_count,
-                idempotency_key
+                event.retry_count
             ))
         return True
 
-    def _row_to_event(self, row: sqlite3.Row) -> ReviewEvent:
-        return ReviewEvent(
-            delivery_id=row['delivery_id'],
-            event_type=row['event_type'],
-            repository=row['repository'],
-            pr_number=row['pr_number'],
-            diff_content=row['diff_content'],
-            status=row['status'],
-            error_message=row['error_message'],
-            created_at=datetime.fromisoformat(row['created_at']),
-            processed_at=datetime.fromisoformat(row['processed_at']) if row['processed_at'] else None,
-            retry_count=row['retry_count']
-        )
-
     def get_pending(self, limit: int = 10) -> list[ReviewEvent]:
-        self._maybe_cleanup()
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute("""
-                SELECT * FROM events
+                SELECT * FROM events 
                 WHERE status IN ('pending', 'failed') AND retry_count < 3
                 ORDER BY created_at ASC
                 LIMIT ?
             """, (limit,))
             rows = cursor.fetchall()
 
-        return [self._row_to_event(row) for row in rows]
-
-    def deduplicate(self, idempotency_key: str, repository: str, pr_number: Optional[int]) -> Optional[ReviewEvent]:
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.execute("""
-                SELECT * FROM events
-                WHERE idempotency_key = ? AND repository = ? AND pr_number = ?
-                ORDER BY created_at DESC
-                LIMIT 1
-            """, (idempotency_key, repository, pr_number))
-            row = cursor.fetchone()
-            if row:
-                return self._row_to_event(row)
-        return None
+        events = []
+        for row in rows:
+            events.append(ReviewEvent(
+                delivery_id=row['delivery_id'],
+                event_type=row['event_type'],
+                repository=row['repository'],
+                pr_number=row['pr_number'],
+                diff_content=row['diff_content'],
+                status=row['status'],
+                error_message=row['error_message'],
+                created_at=datetime.fromisoformat(row['created_at']),
+                processed_at=datetime.fromisoformat(row['processed_at']) if row['processed_at'] else None,
+                retry_count=row['retry_count']
+            ))
+        return events
 
     def update_status(
         self, 
