@@ -1,8 +1,18 @@
+"""
+MasterAgent con LangGraph
+
+NOTA: La implementación paralela con Send API de LangGraph 1.1.3 tiene issues.
+El PR #48 implementará ejecución paralela cuando se resuelva el soporte de Send.
+
+Estado actual: SECUENCIAL (5 x 10s = 50s total)
+Próximo paso: PARALELO (todos al mismo tiempo = ~10s)
+
+Issue tracking: #43 - LangGraph paralelo
+"""
 import asyncio
-from typing import Optional, TypedDict, Annotated
+from typing import Optional, TypedDict
 from dataclasses import dataclass, field
 from enum import Enum
-import operator
 
 from langgraph.graph import StateGraph, END
 from langchain_core.messages import BaseMessage, HumanMessage
@@ -145,42 +155,58 @@ def create_review_graph():
         state["summary"] = summary
         return state
     
-    async def run_all_agents_parallel(state: ReviewState) -> ReviewState:
+    async def run_all_parallel(state: ReviewState) -> ReviewState:
+        """
+        Ejecuta todos los agentes en paralelo usando asyncio.gather.
+        
+        NOTA: Esto es una solución alternativa mientras LangGraph 1.1.x
+        resuelve los issues con Send API para parallel fan-out.
+        """
         tasks = [
-            run_code_quality(state.copy()),
-            run_performance(state.copy()),
-            run_security(state.copy()),
-            run_documentation(state.copy()),
-            run_testing(state.copy()),
+            agents["code_quality"].execute({
+                "diff_content": state["diff_content"],
+                "file_path": "",
+                "language": "python"
+            }),
+            agents["performance"].execute({
+                "diff_content": state["diff_content"],
+                "file_path": "",
+                "language": "python"
+            }),
+            agents["security"].execute({
+                "diff_content": state["diff_content"],
+                "file_path": ""
+            }),
+            agents["documentation"].execute({
+                "diff_content": state["diff_content"],
+                "file_path": "",
+                "language": "python"
+            }),
+            agents["testing"].execute({
+                "diff_content": state["diff_content"],
+                "file_path": "",
+                "existing_tests": ""
+            }),
         ]
         
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        state_copy = state.copy()
+        agent_names = ["code_quality", "performance", "security", "documentation", "testing"]
         for i, result in enumerate(results):
-            if isinstance(result, dict):
-                agent_names = ["code_quality", "performance", "security", "documentation", "testing"]
-                if i < len(agent_names):
-                    state_copy["agent_results"][agent_names[i]] = result
+            if isinstance(result, Exception):
+                state["errors"].append(f"{agent_names[i]}: {str(result)}")
+            else:
+                state["agent_results"][agent_names[i]] = result
         
-        return aggregate_results(state_copy)
+        return aggregate_results(state)
     
     builder = StateGraph(ReviewState)
     
-    builder.add_node("code_quality", run_code_quality)
-    builder.add_node("performance", run_performance)
-    builder.add_node("security", run_security)
-    builder.add_node("documentation", run_documentation)
-    builder.add_node("testing", run_testing)
+    builder.add_node("run_all_parallel", run_all_parallel)
     builder.add_node("aggregate", aggregate_results)
     
-    builder.set_entry_point("security")
-    builder.add_edge("security", "code_quality")
-    builder.add_edge("code_quality", "performance")
-    builder.add_edge("performance", "documentation")
-    builder.add_edge("documentation", "testing")
-    builder.add_edge("testing", "aggregate")
-    builder.add_edge("aggregate", END)
+    builder.set_entry_point("run_all_parallel")
+    builder.add_edge("run_all_parallel", END)
     
     return builder.compile()
 
