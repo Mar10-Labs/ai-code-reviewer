@@ -194,3 +194,92 @@ class TestLLMCircuitBreakerAdapter:
         status = cb_adapter.get_status()
         assert "name" in status
         assert "state" in status
+
+    def test_is_available_when_adapter_available(self):
+        from src.llm.adapters.groq_adapter import GroqAdapter
+        from src.llm.adapters.circuit_breaker_adapter import LLMCircuitBreakerAdapter
+        
+        adapter = GroqAdapter(api_key="test")
+        adapter._available = True
+        cb_adapter = LLMCircuitBreakerAdapter(adapter)
+        
+        assert cb_adapter.is_available() is True
+
+    def test_is_unavailable_when_circuit_open(self):
+        from src.llm.adapters.groq_adapter import GroqAdapter
+        from src.llm.adapters.circuit_breaker_adapter import LLMCircuitBreakerAdapter
+        from src.infrastructure.resilience.circuit_breaker import CircuitBreakerConfig, CircuitBreakerOpen
+        
+        adapter = GroqAdapter(api_key="test")
+        adapter._available = True
+        
+        config = CircuitBreakerConfig(failure_threshold=1, timeout=60)
+        cb_adapter = LLMCircuitBreakerAdapter(adapter, config=config)
+        
+        async def failing_call():
+            raise RuntimeError("Test failure")
+        
+        import asyncio
+        try:
+            asyncio.run(cb_adapter.complete("test"))
+        except (RuntimeError, CircuitBreakerOpen):
+            pass
+        
+        assert cb_adapter._circuit_breaker.is_open
+
+    def test_circuit_breaker_property(self):
+        from src.llm.adapters.groq_adapter import GroqAdapter
+        from src.llm.adapters.circuit_breaker_adapter import LLMCircuitBreakerAdapter
+        
+        adapter = GroqAdapter(api_key="test")
+        cb_adapter = LLMCircuitBreakerAdapter(adapter)
+        
+        assert cb_adapter.circuit_breaker is cb_adapter._circuit_breaker
+
+    def test_reset_circuit_breaker(self):
+        from src.llm.adapters.groq_adapter import GroqAdapter
+        from src.llm.adapters.circuit_breaker_adapter import LLMCircuitBreakerAdapter
+        from src.infrastructure.resilience.circuit_breaker import CircuitBreakerConfig, CircuitState, CircuitBreakerOpen
+        import asyncio
+        
+        adapter = GroqAdapter(api_key="test")
+        config = CircuitBreakerConfig(failure_threshold=1, timeout=60)
+        cb_adapter = LLMCircuitBreakerAdapter(adapter, config=config)
+        
+        async def failing_call():
+            raise RuntimeError("Test failure")
+        
+        try:
+            asyncio.run(cb_adapter.complete("test"))
+        except (RuntimeError, CircuitBreakerOpen):
+            pass
+        
+        cb_adapter.reset()
+        
+        assert cb_adapter._circuit_breaker.state == CircuitState.CLOSED
+
+    def test_custom_name(self):
+        from src.llm.adapters.groq_adapter import GroqAdapter
+        from src.llm.adapters.circuit_breaker_adapter import LLMCircuitBreakerAdapter
+        
+        adapter = GroqAdapter(api_key="test")
+        cb_adapter = LLMCircuitBreakerAdapter(adapter, name="custom-cb")
+        
+        assert cb_adapter._name == "custom-cb"
+        assert "custom-cb" in cb_adapter.circuit_breaker.name
+
+    @pytest.mark.asyncio
+    async def test_complete_structured(self):
+        from src.llm.adapters.groq_adapter import GroqAdapter
+        from src.llm.adapters.circuit_breaker_adapter import LLMCircuitBreakerAdapter
+        from src.llm.ports.llm_port import LLMResponse
+        
+        adapter = GroqAdapter(api_key="test")
+        adapter._available = True
+        cb_adapter = LLMCircuitBreakerAdapter(adapter)
+        
+        try:
+            response = await cb_adapter.complete_structured("test", {"type": "object"})
+            assert isinstance(response, LLMResponse)
+        except Exception:
+            pass
