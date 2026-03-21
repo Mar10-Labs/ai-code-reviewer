@@ -3,12 +3,14 @@ from src.api.routes.schemas import UserCommandRequest
 from src.agents.master_agent import MasterAgent
 from src.infrastructure.queue import QueueManager, ReviewEvent, EventType
 from src.infrastructure.queue.event_store import EventStore
+from src.infrastructure.services.webhook_validator import WebhookValidator, WebhookParser, parse_github_webhook
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
 master = MasterAgent()
 event_store = EventStore()
 queue_manager = QueueManager(event_store=event_store)
+webhook_validator = WebhookValidator()
 
 
 async def process_review_event(event: ReviewEvent):
@@ -59,7 +61,10 @@ async def review_pr(diff_content: str, repository: str = "", pr_number: int = 0)
 async def github_webhook(
     request: Request,
     x_github_event: str = Header(None),
-    x_github_delivery: str = Header(None)
+    x_github_delivery: str = Header(None),
+    x_github_hub_signature: str = Header(None),
+    x_github_hub_signature_256: str = Header(None),
+    x_github_hub_timestamp: str = Header(None)
 ):
     if not x_github_delivery:
         raise HTTPException(status_code=400, detail="Missing X-GitHub-Delivery header")
@@ -71,20 +76,31 @@ async def github_webhook(
             "message": "Event already processed"
         }
 
-    body = await request.json()
+    body = await request.body()
+    signature = x_github_hub_signature_256 or x_github_hub_signature
+    
+    if signature and not webhook_validator.validate_hmac(body, signature, x_github_hub_timestamp):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    webhook_data = parse_github_webhook(payload, x_github_event, x_github_delivery)
+    
     event_type = EventType.PULL_REQUEST
     diff_content = ""
-    repository = ""
-    pr_number = None
+    repository = webhook_data.repository
+    pr_number = webhook_data.pr_number
 
-    if x_github_event == "pull_request":
-        action = body.get("action")
-        if action in ["opened", "synchronize", "reopened"]:
-            pr = body.get("pull_request", {})
-            pr_number = pr.get("number")
-            repository = body.get("repository", {}).get("full_name", "")
-            diff_content = pr.get("diff", "")
-            event_type = EventType.PULL_REQUEST
+    if webhook_data.event_type == "pull_request" and webhook_data.action in ["opened", "synchronize", "reopened"]:
+        pr = payload.get("pull_request", {})
+        diff_content = pr.get("diff", "")
+        event_type = EventType.PULL_REQUEST
+    elif webhook_data.event_type == "push":
+        event_type = EventType.PUSH
+        diff_content = ""
 
     event = ReviewEvent(
         delivery_id=x_github_delivery,
