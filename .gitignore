@@ -210,6 +210,7 @@ __marimo__/
 .agents/
 
 # Local files
+AGENTS.md
 NOTAS.txt
 data/events.db
 docs/
